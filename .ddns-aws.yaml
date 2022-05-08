@@ -1,0 +1,38 @@
+# This is initial DDNS-AWS config file
+# but it will be overwritten by DDNS-AWS and comments will be lost!
+# ENV variables will take precendence over config AND will also overwrite config!
+#
+#
+# `make install` copies this config to `etc/.ddns-aws.yaml` but it can also be moved
+# to HOME directory of user running it
+
+
+#Port to run server on. DDNS_AWS_SERVER_PORT takes precendence if defined:
+server_port: 8125
+
+#Username to authenticate ddns clients. DDNS_AWS_SERVER_USERNAME takes precendence if defined
+server_username: ddns
+
+#Password (or key) to authenticate ddns clients. DDNS_AWS_SERVER_PASSWORD takes precendence if defined
+server_password: ddns
+
+#path to server certificate (for HTTPS). DDNS_AWS_SERVER_CERT takes precendence if defined
+server_cert: ""
+
+#path to server private key (for HTTPS). DDNS_AWS_SERVER_PRIVATE_KEY takes precendence if defined
+server_privatekey: ""
+
+#NOTE: if certificate or private key is not specified, DDNS-AWS will run in HTTP mode (not recommended for production!)
+
+
+# AWS Route 53 access config. ENV variables (all caps) take precendence if defined
+AWS_region: ""
+AWS_Access_key_id: ""
+AWS_Secret_access_key: ""
+
+
+
+
+# No need to edit this line now. DDNS-AWS will update it using CLI. It contains list of active domains
+# (domains allowed to be managed by DDNS-AWS)
+active: []
