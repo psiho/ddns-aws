@@ -7,6 +7,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/spf13/viper"
@@ -50,14 +51,20 @@ func handleQuery(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// get optional 'ip' parameter or try getting ip from the request
+	// get optional 'myip' parameter. If it's missing or not a public IPv4
+	// (e.g. client behind NAT sent its WAN address), use the client's real IP
 	ip := q.Get("myip")
-	if ip == "" {
-		host, _, err := net.SplitHostPort(r.RemoteAddr)
-		if err != nil {
+	if parsed := net.ParseIP(ip); parsed == nil || !isPublicIPv4(parsed) {
+		client, err := clientIP(r)
+		if err != nil || !isPublicIPv4(client) {
+			log.Printf("Rejected update for '%v': no usable public IPv4 (myip: '%v', client: '%v')\n", name, ip, client)
 			fmt.Fprint(w, "dnserr")
+			return
 		}
-		ip = host
+		if ip != "" {
+			log.Printf("Ignoring non-public myip '%v' for '%v', using client IP '%v'\n", ip, name, client)
+		}
+		ip = client.String()
 	}
 
 	// finally, update record
@@ -88,6 +95,40 @@ func handleQuery(w http.ResponseWriter, r *http.Request) {
 		log.Println("Error: 500 Internal Server Error. Unexpected success status.")
 		fmt.Fprint(w, "911")
 	}
+}
+
+// clientIP returns the IP of the client. X-Real-IP header is trusted only when
+// the request comes from a local reverse proxy (loopback or private address).
+func clientIP(r *http.Request) (net.IP, error) {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return nil, err
+	}
+	remote := net.ParseIP(host)
+	if remote == nil {
+		return nil, fmt.Errorf("invalid remote address '%v'", host)
+	}
+
+	if remote.IsLoopback() || remote.IsPrivate() {
+		if realIP := net.ParseIP(strings.TrimSpace(r.Header.Get("X-Real-IP"))); realIP != nil {
+			return realIP, nil
+		}
+	}
+
+	return remote, nil
+}
+
+// isPublicIPv4 reports whether ip is an IPv4 address routable on the internet
+func isPublicIPv4(ip net.IP) bool {
+	ip4 := ip.To4()
+	if ip4 == nil || !ip4.IsGlobalUnicast() || ip4.IsPrivate() {
+		return false
+	}
+	// carrier-grade NAT range 100.64.0.0/10
+	if ip4[0] == 100 && ip4[1]&0xc0 == 64 {
+		return false
+	}
+	return true
 }
 
 func basicAuth(next http.HandlerFunc) http.HandlerFunc {
